@@ -58,7 +58,6 @@ fil2 = df.filter(df.distance > 1000)
 sel1 = df.select('x', 'y', 'z')
 sel2 = df.select(df.x, df.y, df.z)
 
-
 #Running two pre-created filters on the selected columns
 filA = df.origin == 'X'
 filB = df.origin == 'Y'
@@ -99,7 +98,7 @@ model_df = model_df.withColumn('age', model_df.year - model_df.gadget_age)
 #Converting booleans
 model_df = model_df.withColumn('is_late', model_df.time > 0)
 model_df = model_df.withColumn('label', model_df.is_late.cast('integer'))
-#Re,oving missings
+#Removing missing values
 model_df = modelf_df.filter('x IS NOT NULL AND y IS NOT NULL')
 
 #To handle strings you need to create "OneHotVectors", which represent strings as arrays with all zero elements bar one
@@ -107,3 +106,30 @@ model_df = modelf_df.filter('x IS NOT NULL AND y IS NOT NULL')
 # 2) Estimator returns a Transformer, which takes DF, attaches mapping as metadata
 # 3) returns new df with numeric column corresponding to string column
 # 4) encode numeric as a one-hot vector using OneHotEncoder.
+df_indx = StringIndexer(inputCol = 'col_x', outputCol = 'col_x_index')
+df_encd = OneHotEncoder(inputCol = 'col_x_index', outputCol = 'col_x_fact')
+
+#To run the model, all data must be in a single column VectorAssembler does this
+from pyspark.ml.feature import VectorAssembler
+from pyspark.ml import Pipeline
+
+vec_assembler = VectorAssembler(inputCols = ['col1', 'col2', 'col3'], outputCol = 'features')
+tmp_pipe = Pipeline(stages = [df_indx, df_encd, vec_assembler])
+
+#Fitting the data
+piped_data = tmp_pipe.fit(model_df).transform(model_df)
+
+#Train/test Split
+training, test = piped_data.randomSplit([.6, .4])
+
+#Logreg
+from pyspark.ml.classification import LogisticRegression
+lr = LogisticRegression()
+
+#Evaluating performance, in this case the area under curve (AUC)
+import pyspark.ml.evaluation as evals
+evaluator = evals.BinaryClassificationEvaluator(metricName = 'areaUnderROC')
+
+#Creating a grid of tuning parameters
+import pyspark.ml.tuning as tune
+grid = tune.ParamGridBuilder()
